@@ -33,7 +33,6 @@ const (
 // EnDecAMF0 AMF0协议解析器
 type EnDecAMF0 struct {
 	deRefCache []interface{}
-	enRefCache []interface{}
 	EnDecAMF3
 }
 
@@ -413,11 +412,6 @@ func (ed *EnDecAMF0) EncodeUnsupported(w io.Writer) (int, error) {
 	return 1, nil
 }
 
-// GetCacheLastIndex 获取缓存索引的最新值
-func (ed *EnDecAMF0) GetCacheLastIndex() int {
-	return len(ed.enRefCache)
-}
-
 // ====================================================================
 
 func (ed *EnDecAMF0) encodeNumber(w io.Writer, val float64) (n int, err error) {
@@ -514,9 +508,6 @@ func (ed *EnDecAMF0) encodeObject(w io.Writer, val Object, encodeMarker bool) (n
 	}
 	n++
 
-	// 缓存
-	ed.enRefCache = append(ed.enRefCache, val)
-
 	return
 }
 
@@ -550,9 +541,6 @@ func (ed *EnDecAMF0) encodeStrictArray(w io.Writer, val Array) (n int, err error
 		}
 		n += m
 	}
-
-	// 缓存
-	ed.enRefCache = append(ed.enRefCache, val)
 
 	return
 }
@@ -621,9 +609,6 @@ func (ed *EnDecAMF0) encodeTypeObject(w io.Writer, tyeObj TypedObject) (n int, e
 		return
 	}
 	n += m
-
-	// 缓存
-	ed.enRefCache = append(ed.enRefCache, tyeObj)
 
 	return
 }

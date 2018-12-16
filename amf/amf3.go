@@ -51,9 +51,7 @@ type ExternalHandler func(*EnDecAMF3, io.Reader) (interface{}, error)
 // EnDecAMF3 AMF3协议解析器
 type EnDecAMF3 struct {
 	deStrTable       []string
-	enStrTable       []string // 未使用
 	deObjTable       []interface{}
-	enObjTable       []interface{} // 未使用
 	traitTable       []TraitAMF3
 	externalHandlers map[string]ExternalHandler
 }
