@@ -2,6 +2,7 @@ package amf
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -343,7 +344,7 @@ func (ed *EnDecAMF3) decodeObject(r io.Reader) (interface{}, error) {
 					return nil, err
 				}
 			} else {
-				return nil, err
+				return nil, errors.New("no targer function")
 			}
 		}
 

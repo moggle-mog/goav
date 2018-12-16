@@ -7,53 +7,56 @@ import (
 )
 
 // DSA
-func (ed *EnDecAMF3) decodeAsyncMessage(r io.Reader) (result Object, err error) {
-	if result, err = ed.decodeAbstractMessage(r); err != nil {
-		return
+func (ed *EnDecAMF3) decodeAsyncMessage(r io.Reader) (Object, error) {
+	result, err := ed.decodeAbstractMessage(r)
+	if err != nil {
+		return nil, err
 	}
 
 	if err = ed.decodeExternal(r, &result, []string{"correlationId", "correlationIdBytes"}); err != nil {
-		return
+		return nil, err
 	}
 
-	return
+	return result, nil
 }
 
 // DSK
-func (ed *EnDecAMF3) decodeAcknowledgeMessage(r io.Reader) (result Object, err error) {
-	if result, err = ed.decodeAsyncMessage(r); err != nil {
-		return
+func (ed *EnDecAMF3) decodeAcknowledgeMessage(r io.Reader) (Object, error) {
+	result, err := ed.decodeAsyncMessage(r)
+	if err != nil {
+		return nil, err
 	}
 
 	if err = ed.decodeExternal(r, &result); err != nil {
-		return
+		return nil, err
 	}
 
-	return
+	return result, nil
 }
 
 // Abstract external boilerplate
-func (ed *EnDecAMF3) decodeAbstractMessage(r io.Reader) (result Object, err error) {
-	result = make(Object)
+func (ed *EnDecAMF3) decodeAbstractMessage(r io.Reader) (Object, error) {
+	result := make(Object)
 
-	if err = ed.decodeExternal(r, &result,
+	if err := ed.decodeExternal(r, &result,
 		[]string{"body", "clientId", "destination", "headers", "messageId", "timeStamp", "timeToLive"},
 		[]string{"clientIdBytes", "messageIdBytes"}); err != nil {
-		return result, fmt.Errorf("unable to decode abstract external: %s", err)
+		return nil, err
 	}
 
-	return
+	return result, nil
 }
 
-func (ed *EnDecAMF3) decodeExternal(r io.Reader, obj *Object, fieldSets ...[]string) (err error) {
-	var flagSet []uint8
-	if flagSet, err = ed.readFlags(r); err != nil {
+func (ed *EnDecAMF3) decodeExternal(r io.Reader, obj *Object, fieldSets ...[]string) error {
+	flagSet, err := ed.readFlags(r)
+	if err != nil {
 		return err
 	}
 
 	var fieldNames []string
 	var reservedPosition uint8
 	for i, flags := range flagSet {
+		// 从传出的值中找到目标值
 		if i < len(fieldSets) {
 			fieldNames = fieldSets[i]
 		} else {
@@ -90,7 +93,7 @@ func (ed *EnDecAMF3) decodeExternal(r io.Reader, obj *Object, fieldSets ...[]str
 		}
 	}
 
-	return
+	return nil
 }
 
 // byte的最后一位是标志位
