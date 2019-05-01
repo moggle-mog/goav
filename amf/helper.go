@@ -37,6 +37,7 @@ func writeByte(w io.Writer, b byte) error {
 	if err != nil {
 		return err
 	}
+
 	if n != 1 {
 		return fmt.Errorf("write %d byte, got error: %s", n, err)
 	}
@@ -66,8 +67,9 @@ func readBytes(r io.Reader, n int) ([]byte, error) {
 	if err != nil {
 		return bytes, err
 	}
+
 	if m != n {
-		return bytes, fmt.Errorf("decode read bytes failed: expected %d bytes, but got %d bytes", m, n)
+		return bytes, fmt.Errorf("expected %d bytes, but got %d bytes", m, n)
 	}
 
 	return bytes, nil
@@ -82,7 +84,7 @@ func nextByteMustBe(r io.Reader, target byte) error {
 	}
 
 	if marker != target {
-		return fmt.Errorf("assert failed: expected %v got %v", target, marker)
+		return fmt.Errorf("expected %v got %v", target, marker)
 	}
 
 	return nil

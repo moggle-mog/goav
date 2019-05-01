@@ -54,7 +54,8 @@ func (ed *EnDecAMF0) Decode(r io.Reader) (interface{}, error) {
 		// marker: 1 byte 0x00
 		// format: 8 byte big endian float64
 		var f64 float64
-		if err = binary.Read(r, binary.BigEndian, &f64); err != nil {
+		err = binary.Read(r, binary.BigEndian, &f64)
+		if err != nil {
 			return f64, err
 		}
 
@@ -63,7 +64,8 @@ func (ed *EnDecAMF0) Decode(r io.Reader) (interface{}, error) {
 		// marker: 1 byte 0x01
 		// format: 1 byte, 0x00 = false, 0x01 = true
 		var flag byte
-		if flag, err = readByte(r); err != nil {
+		flag, err = readByte(r)
+		if err != nil {
 			return nil, err
 		}
 
@@ -112,8 +114,13 @@ func (ed *EnDecAMF0) DecodeBatch(r io.Reader) ([]interface{}, error) {
 	for {
 		v, err := ed.Decode(r)
 		if err != nil {
+			if err == io.EOF {
+				return ret, nil
+			}
+
 			return ret, err
 		}
+
 		ret = append(ret, v)
 	}
 }
@@ -123,7 +130,8 @@ func (ed *EnDecAMF0) DecodeBatch(r io.Reader) ([]interface{}, error) {
 func (ed *EnDecAMF0) decodeString(r io.Reader) (string, error) {
 	// 字符串最大长度: 65535(B) ≈ 64(K)
 	var length uint16
-	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+	err := binary.Read(r, binary.BigEndian, &length)
+	if err != nil {
 		return "", err
 	}
 
@@ -149,7 +157,8 @@ func (ed *EnDecAMF0) decodeObject(r io.Reader) (Object, error) {
 
 		// [出口]空字符串后应该是结束符
 		if key == "" {
-			if err = nextByteMustBe(r, objectEndMarkerOnAMF0); err != nil {
+			err = nextByteMustBe(r, objectEndMarkerOnAMF0)
+			if err != nil {
 				return nil, err
 			}
 
@@ -168,12 +177,13 @@ func (ed *EnDecAMF0) decodeObject(r io.Reader) (Object, error) {
 
 func (ed *EnDecAMF0) decodeReference(r io.Reader) (interface{}, error) {
 	var ref uint16
-	if err := binary.Read(r, binary.BigEndian, &ref); err != nil {
+	err := binary.Read(r, binary.BigEndian, &ref)
+	if err != nil {
 		return nil, err
 	}
 
 	if int(ref) > len(ed.deRefCache) {
-		return nil, fmt.Errorf("decode amf0: bad reference %d (current length %d)", ref, len(ed.deRefCache))
+		return nil, fmt.Errorf("bad reference %d (current length %d)", ref, len(ed.deRefCache))
 	}
 
 	return ed.deRefCache[ref], nil
@@ -182,7 +192,8 @@ func (ed *EnDecAMF0) decodeReference(r io.Reader) (interface{}, error) {
 func (ed *EnDecAMF0) decodeEcmaArray(r io.Reader) (Object, error) {
 	// 关联数组长度
 	var length uint32
-	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+	err := binary.Read(r, binary.BigEndian, &length)
+	if err != nil {
 		return nil, err
 	}
 
@@ -199,7 +210,8 @@ func (ed *EnDecAMF0) decodeEcmaArray(r io.Reader) (Object, error) {
 
 func (ed *EnDecAMF0) decodeStrictArray(r io.Reader) (Array, error) {
 	var length uint32
-	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+	err := binary.Read(r, binary.BigEndian, &length)
+	if err != nil {
 		return nil, err
 	}
 
@@ -222,12 +234,14 @@ func (ed *EnDecAMF0) decodeStrictArray(r io.Reader) (Array, error) {
 
 func (ed *EnDecAMF0) decodeDate(r io.Reader) (float64, error) {
 	var result float64
-	if err := binary.Read(r, binary.BigEndian, &result); err != nil {
+	err := binary.Read(r, binary.BigEndian, &result)
+	if err != nil {
 		return 0, err
 	}
 
 	// 读取2字节(未使用)
-	if _, err := readBytes(r, 2); err != nil {
+	_, err = readBytes(r, 2)
+	if err != nil {
 		return 0, err
 	}
 
@@ -237,7 +251,8 @@ func (ed *EnDecAMF0) decodeDate(r io.Reader) (float64, error) {
 func (ed *EnDecAMF0) decodeLongString(r io.Reader) (string, error) {
 	// 字符串最大长度: 4294967295 Bytes ≈ 4G
 	var length uint32
-	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+	err := binary.Read(r, binary.BigEndian, &length)
+	if err != nil {
 		return "", err
 	}
 
@@ -317,17 +332,20 @@ func (ed *EnDecAMF0) Encode(w io.Writer, val interface{}) (int, error) {
 		for i := 0; i < v.Len(); i++ {
 			arr[i] = v.Index(int(i)).Interface()
 		}
+
 		return ed.encodeStrictArray(w, arr)
 	}
 
 	// 未知类型
-	return 0, fmt.Errorf("encode amf0: unsupported type %s", v.Type())
+	return 0, fmt.Errorf("undefined type %s", v.Type())
 }
 
 // EncodeBatch 批量封装AMF(底层调用Encode)
 func (ed *EnDecAMF0) EncodeBatch(w io.Writer, args ...interface{}) error {
+	var err error
 	for _, v := range args {
-		if _, err := ed.Encode(w, v); err != nil {
+		_, err = ed.Encode(w, v)
+		if err != nil {
 			return err
 		}
 	}
@@ -337,66 +355,81 @@ func (ed *EnDecAMF0) EncodeBatch(w io.Writer, args ...interface{}) error {
 
 // EncodeWithAMF3 使用AMF3编码数据
 func (ed *EnDecAMF0) EncodeWithAMF3(w io.Writer, val interface{}) (int, error) {
-	if err := writeByte(w, avmPlusObjectMarkerOnAMF0); err != nil {
+	err := writeByte(w, avmPlusObjectMarkerOnAMF0)
+	if err != nil {
 		return 0, nil
 	}
 
 	n, err := ed.EnDecAMF3.Encode(w, val)
-	return n + 1, err
+	if err != nil {
+		return 0, err
+	}
+
+	return n + 1, nil
 }
 
 // EncodeXmlDocument 编码Xml类型
 func (ed *EnDecAMF0) EncodeXmlDocument(w io.Writer, val string) (int, error) {
-	if err := writeByte(w, xmlDocumentMarkerOnAMF0); err != nil {
+	err := writeByte(w, xmlDocumentMarkerOnAMF0)
+	if err != nil {
 		return 0, nil
 	}
 
 	n, err := ed.encodeLongString(w, val, false)
-	return n + 1, err
+	if err != nil {
+		return 0, err
+	}
+
+	return n + 1, nil
 }
 
 // EncodeReference 编写引用类型
-func (ed *EnDecAMF0) EncodeReference(w io.Writer, ref uint16) (n int, err error) {
-	if err = writeByte(w, referenceMarkerOnAMF0); err != nil {
-		return
+func (ed *EnDecAMF0) EncodeReference(w io.Writer, ref uint16) (int, error) {
+	err := writeByte(w, referenceMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
-	if err = binary.Write(w, binary.BigEndian, ref); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, ref)
+	if err != nil {
+		return 0, err
 	}
 	n += 2
 
-	return
+	return n, nil
 }
 
 // EncodeEcmaArray 编码关联数组类型
-func (ed *EnDecAMF0) EncodeEcmaArray(w io.Writer, val Object) (n int, err error) {
-	if err = writeByte(w, ecmaArrayMarkerOnAMF0); err != nil {
-		return
+func (ed *EnDecAMF0) EncodeEcmaArray(w io.Writer, val Object) (int, error) {
+	err := writeByte(w, ecmaArrayMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	// 数组长度
 	length := uint32(len(val))
-	if err = binary.Write(w, binary.BigEndian, length); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, length)
+	if err != nil {
+		return 0, err
 	}
 	n += 4
 
 	// 数组(对象)
 	m, err := ed.encodeObject(w, val, false)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
-	return
+	return n, nil
 }
 
 // EncodeUndefined 编码未定义类型
 func (ed *EnDecAMF0) EncodeUndefined(w io.Writer) (int, error) {
-	if err := writeByte(w, undefinedMarkerOnAMF0); err != nil {
+	err := writeByte(w, undefinedMarkerOnAMF0)
+	if err != nil {
 		return 0, err
 	}
 
@@ -405,7 +438,8 @@ func (ed *EnDecAMF0) EncodeUndefined(w io.Writer) (int, error) {
 
 // EncodeUndefined 编码不支持类型
 func (ed *EnDecAMF0) EncodeUnsupported(w io.Writer) (int, error) {
-	if err := writeByte(w, unsupportedMarkerOnAMF0); err != nil {
+	err := writeByte(w, unsupportedMarkerOnAMF0)
+	if err != nil {
 		return 0, err
 	}
 
@@ -414,25 +448,28 @@ func (ed *EnDecAMF0) EncodeUnsupported(w io.Writer) (int, error) {
 
 // ====================================================================
 
-func (ed *EnDecAMF0) encodeNumber(w io.Writer, val float64) (n int, err error) {
-	if err = writeByte(w, numberMarkerOnAMF0); err != nil {
-		return
+func (ed *EnDecAMF0) encodeNumber(w io.Writer, val float64) (int, error) {
+	err := writeByte(w, numberMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
-	if err = binary.Write(w, binary.BigEndian, &val); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, &val)
+	if err != nil {
+		return 0, err
 	}
 	n += 8
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF0) encodeBoolean(w io.Writer, val bool) (n int, err error) {
-	if err = writeByte(w, booleanMarkerOnAMF0); err != nil {
-		return
+func (ed *EnDecAMF0) encodeBoolean(w io.Writer, val bool) (int, error) {
+	err := writeByte(w, booleanMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	buf := make([]byte, 1)
 	if val {
@@ -440,40 +477,52 @@ func (ed *EnDecAMF0) encodeBoolean(w io.Writer, val bool) (n int, err error) {
 	} else {
 		buf[0] = 0
 	}
-	if _, err = w.Write(buf); err != nil {
-		return
+
+	_, err = w.Write(buf)
+	if err != nil {
+		return 0, err
 	}
 	n += 1
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF0) encodeString(w io.Writer, val string, encodeMarker bool) (n int, err error) {
+func (ed *EnDecAMF0) encodeString(w io.Writer, val string, encodeMarker bool) (int, error) {
+	var n int
+	var err error
+
 	if encodeMarker {
-		if err = writeByte(w, stringMarkerOnAMF0); err != nil {
-			return
+		err = writeByte(w, stringMarkerOnAMF0)
+		if err != nil {
+			return 0, err
 		}
 		n++
 	}
 
 	length := uint16(len(val))
-	if err = binary.Write(w, binary.BigEndian, length); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, length)
+	if err != nil {
+		return 0, err
 	}
 	n += 2
 
-	if _, err = w.Write([]byte(val)); err != nil {
-		return n, err
+	_, err = w.Write([]byte(val))
+	if err != nil {
+		return 0, err
 	}
 	n += int(length)
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF0) encodeObject(w io.Writer, val Object, encodeMarker bool) (n int, err error) {
+func (ed *EnDecAMF0) encodeObject(w io.Writer, val Object, encodeMarker bool) (int, error) {
+	var n int
+	var err error
+
 	if encodeMarker {
-		if err = writeByte(w, objectMarkerOnAMF0); err != nil {
-			return
+		err = writeByte(w, objectMarkerOnAMF0)
+		if err != nil {
+			return 0, err
 		}
 		n++
 	}
@@ -483,14 +532,14 @@ func (ed *EnDecAMF0) encodeObject(w io.Writer, val Object, encodeMarker bool) (n
 		// 数组key
 		m, err = ed.encodeString(w, k, false)
 		if err != nil {
-			return
+			return 0, err
 		}
 		n += m
 
 		// 数组value
 		m, err = ed.Encode(w, v)
 		if err != nil {
-			return
+			return 0, err
 		}
 		n += m
 	}
@@ -498,37 +547,41 @@ func (ed *EnDecAMF0) encodeObject(w io.Writer, val Object, encodeMarker bool) (n
 	// 结束符: UTF-8-empty
 	m, err = ed.encodeString(w, "", false)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
 	// 结束符: object-end-marker
-	if err = writeByte(w, objectEndMarkerOnAMF0); err != nil {
-		return
+	err = writeByte(w, objectEndMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
 	n++
 
-	return
+	return n, nil
 }
 
 func (ed *EnDecAMF0) encodeNull(w io.Writer) (int, error) {
-	if err := writeByte(w, nullMarkerOnAMF0); err != nil {
+	err := writeByte(w, nullMarkerOnAMF0)
+	if err != nil {
 		return 0, err
 	}
 
 	return 1, nil
 }
 
-func (ed *EnDecAMF0) encodeStrictArray(w io.Writer, val Array) (n int, err error) {
-	if err = writeByte(w, strictArrayMarkerOnAMF0); err != nil {
-		return
+func (ed *EnDecAMF0) encodeStrictArray(w io.Writer, val Array) (int, error) {
+	err := writeByte(w, strictArrayMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	// 数组长度
 	length := uint32(len(val))
-	if err = binary.Write(w, binary.BigEndian, length); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, length)
+	if err != nil {
+		return 0, err
 	}
 	n += 4
 
@@ -537,78 +590,86 @@ func (ed *EnDecAMF0) encodeStrictArray(w io.Writer, val Array) (n int, err error
 	for _, v := range val {
 		m, err = ed.Encode(w, v)
 		if err != nil {
-			return
+			return 0, err
 		}
 		n += m
 	}
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF0) encodeDate(w io.Writer, val time.Time) (n int, err error) {
-	if err = writeByte(w, dateMarkerOnAMF0); err != nil {
-		return
+func (ed *EnDecAMF0) encodeDate(w io.Writer, val time.Time) (int, error) {
+	err := writeByte(w, dateMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	var m = 0
 	m, err = ed.encodeNumber(w, float64(val.Unix())*1000.0)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
-	if err = binary.Write(w, binary.BigEndian, int16(0)); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, int16(0))
+	if err != nil {
+		return 0, err
 	}
 	n += 2
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF0) encodeLongString(w io.Writer, val string, encodeMarker bool) (n int, err error) {
+func (ed *EnDecAMF0) encodeLongString(w io.Writer, val string, encodeMarker bool) (int, error) {
+	var n int
+	var err error
+
 	if encodeMarker {
-		if err = writeByte(w, longStringMarkerOnAMF0); err != nil {
-			return
+		err = writeByte(w, longStringMarkerOnAMF0)
+		if err != nil {
+			return 0, err
 		}
 		n++
 	}
 
 	// 写入字符串长度
 	length := uint32(len(val))
-	if err = binary.Write(w, binary.BigEndian, length); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, length)
+	if err != nil {
+		return 0, err
 	}
 	n += 4
 
 	// 写入字符串
 	m, err := w.Write([]byte(val))
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF0) encodeTypeObject(w io.Writer, tyeObj TypedObject) (n int, err error) {
-	if err = writeByte(w, typedObjectMarkerOnAMF0); err != nil {
-		return
+func (ed *EnDecAMF0) encodeTypeObject(w io.Writer, tyeObj TypedObject) (int, error) {
+	err := writeByte(w, typedObjectMarkerOnAMF0)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	var m = 0
 	m, err = ed.encodeString(w, tyeObj.Type, false)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
 	m, err = ed.encodeObject(w, tyeObj.Object, false)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
-	return
+	return n, nil
 }

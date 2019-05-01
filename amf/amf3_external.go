@@ -13,7 +13,8 @@ func (ed *EnDecAMF3) decodeAsyncMessage(r io.Reader) (Object, error) {
 		return nil, err
 	}
 
-	if err = ed.decodeExternal(r, &result, []string{"correlationId", "correlationIdBytes"}); err != nil {
+	err = ed.decodeExternal(r, &result, []string{"correlationId", "correlationIdBytes"})
+	if err != nil {
 		return nil, err
 	}
 
@@ -27,7 +28,8 @@ func (ed *EnDecAMF3) decodeAcknowledgeMessage(r io.Reader) (Object, error) {
 		return nil, err
 	}
 
-	if err = ed.decodeExternal(r, &result); err != nil {
+	err = ed.decodeExternal(r, &result)
+	if err != nil {
 		return nil, err
 	}
 
@@ -38,9 +40,10 @@ func (ed *EnDecAMF3) decodeAcknowledgeMessage(r io.Reader) (Object, error) {
 func (ed *EnDecAMF3) decodeAbstractMessage(r io.Reader) (Object, error) {
 	result := make(Object)
 
-	if err := ed.decodeExternal(r, &result,
+	err := ed.decodeExternal(r, &result,
 		[]string{"body", "clientId", "destination", "headers", "messageId", "timeStamp", "timeToLive"},
-		[]string{"clientIdBytes", "messageIdBytes"}); err != nil {
+		[]string{"clientIdBytes", "messageIdBytes"})
+	if err != nil {
 		return nil, err
 	}
 
@@ -100,7 +103,8 @@ func (ed *EnDecAMF3) decodeExternal(r io.Reader, obj *Object, fieldSets ...[]str
 func (ed *EnDecAMF3) readFlags(r io.Reader) (result []uint8, err error) {
 	var flag byte
 	for {
-		if flag, err = readByte(r); err != nil {
+		flag, err = readByte(r)
+		if err != nil {
 			return
 		}
 

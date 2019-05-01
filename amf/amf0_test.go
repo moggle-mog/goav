@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"github.com/stretchr/testify/assert"
-	"io"
 	"testing"
 )
 
@@ -511,6 +510,6 @@ func TestEnDecAMF0_RealCase1(t *testing.T) {
 	expect := []interface{}([]interface{}{"publish", float64(0), interface{}(nil), "camstream", "live"})
 
 	ret, err := NewEnDecAMF0().DecodeBatch(buf)
-	at.Equal(io.EOF, err)
+	at.Nil(err)
 	at.Equal(expect, ret)
 }

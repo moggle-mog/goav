@@ -87,7 +87,8 @@ func (ed *EnDecAMF3) Decode(r io.Reader) (interface{}, error) {
 		return ed.readUint29(r)
 	case doubleMarkerOnAMF3:
 		var f64 float64
-		if err := binary.Read(r, binary.BigEndian, &f64); err != nil {
+		err = binary.Read(r, binary.BigEndian, &f64)
+		if err != nil {
 			return f64, err
 		}
 
@@ -107,12 +108,12 @@ func (ed *EnDecAMF3) Decode(r io.Reader) (interface{}, error) {
 	case byteArrayMarkerOnAMF3:
 		return ed.decodeByteArray(r)
 	case vectorIntMarkerOnAMF3, vectorUintMarkerOnAMF3, vectorDoubleMarkerOnAMF3, vectorObjectMarkerOnAMF3:
-		return nil, fmt.Errorf("decode amf3: unrealized type %d", marker)
+		return nil, fmt.Errorf("unrealized type %d", marker)
 	case dictionaryMarkerOnAMF3:
-		return nil, fmt.Errorf("decode amf3: unrealized type %d", marker)
+		return nil, fmt.Errorf("unrealized type %d", marker)
 	}
 
-	return nil, fmt.Errorf("decode amf3: unsupported type %d", marker)
+	return nil, fmt.Errorf("undefined type %d", marker)
 }
 
 // DecodeBatch 批量解析AMF(底层调用Decode)
@@ -121,6 +122,10 @@ func (ed *EnDecAMF3) DecodeBatch(r io.Reader) ([]interface{}, error) {
 	for {
 		v, err := ed.Decode(r)
 		if err != nil {
+			if err == io.EOF {
+				return ret, nil
+			}
+
 			return ret, err
 		}
 		ret = append(ret, v)
@@ -140,7 +145,7 @@ func (ed *EnDecAMF3) decodeString(r io.Reader) (string, error) {
 	if isRef {
 		index := int(refVal)
 		if index >= len(ed.deStrTable) {
-			return "", fmt.Errorf("amf3 decode: string index outbound(expected < %d, got %d)", len(ed.deStrTable), index)
+			return "", fmt.Errorf("string index outbound(expected < %d, got %d)", len(ed.deStrTable), index)
 		}
 
 		return ed.deStrTable[index], nil
@@ -175,13 +180,13 @@ func (ed *EnDecAMF3) decodeDate(r io.Reader) (time.Time, error) {
 	if isRef {
 		index := int(refVal)
 		if index >= len(ed.deObjTable) {
-			return time.Time{}, fmt.Errorf("amf3 decode date: object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
+			return time.Time{}, fmt.Errorf("object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
 		}
 
 		// 将数值转换为time类型
 		result, ok := ed.deObjTable[index].(time.Time)
 		if !ok {
-			return time.Time{}, fmt.Errorf("amf3 decode date: unable to extract time from date object references")
+			return time.Time{}, fmt.Errorf("unable to extract time from date object references")
 		}
 
 		return result, nil
@@ -190,7 +195,7 @@ func (ed *EnDecAMF3) decodeDate(r io.Reader) (time.Time, error) {
 	// 按数值取值
 	var f64 float64
 	if err = binary.Read(r, binary.BigEndian, &f64); err != nil {
-		return time.Time{}, fmt.Errorf("amf3 decode date: unable to read double: %s", err)
+		return time.Time{}, fmt.Errorf("unable to read double: %s", err)
 	}
 
 	// 将毫秒转换为秒
@@ -211,13 +216,13 @@ func (ed *EnDecAMF3) decodeArray(r io.Reader) (EcmaArrayAMF3, error) {
 	if isRef {
 		index := int(refVal)
 		if index >= len(ed.deObjTable) {
-			return EcmaArrayAMF3{}, fmt.Errorf("amf3 decode array: object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
+			return EcmaArrayAMF3{}, fmt.Errorf("object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
 		}
 
 		// 转换类型
 		res, ok := ed.deObjTable[index].(EcmaArrayAMF3)
 		if !ok {
-			return EcmaArrayAMF3{}, fmt.Errorf("amf3 decode array: unable to extract array from object references")
+			return EcmaArrayAMF3{}, fmt.Errorf("unable to extract array from object references")
 		}
 
 		return res, err
@@ -225,7 +230,8 @@ func (ed *EnDecAMF3) decodeArray(r io.Reader) (EcmaArrayAMF3, error) {
 
 	// 按数值取值
 	var key string
-	if key, err = ed.decodeString(r); err != nil {
+	key, err = ed.decodeString(r)
+	if err != nil {
 		return EcmaArrayAMF3{}, err
 	}
 
@@ -238,19 +244,22 @@ func (ed *EnDecAMF3) decodeArray(r io.Reader) (EcmaArrayAMF3, error) {
 	// list of assoicative array, terminated by an empty string
 	for key != "" {
 		// 读取key对应的值
-		if result.associative[key], err = ed.Decode(r); err != nil {
+		result.associative[key], err = ed.Decode(r)
+		if err != nil {
 			return EcmaArrayAMF3{}, err
 		}
 
 		// 读取下一个key
-		if key, err = ed.decodeString(r); err != nil {
+		key, err = ed.decodeString(r)
+		if err != nil {
 			return EcmaArrayAMF3{}, err
 		}
 	}
 
 	// list of dense array
 	for i := uint32(0); i < refVal; i++ {
-		if result.dense[i], err = ed.Decode(r); err != nil {
+		result.dense[i], err = ed.Decode(r)
+		if err != nil {
 			return EcmaArrayAMF3{}, err
 		}
 	}
@@ -268,7 +277,7 @@ func (ed *EnDecAMF3) decodeObject(r io.Reader) (interface{}, error) {
 	if isRef {
 		index := int(refVal)
 		if index >= len(ed.deObjTable) {
-			return nil, fmt.Errorf("amf3 decode object: object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
+			return nil, fmt.Errorf("object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
 		}
 
 		return ed.deObjTable[index], nil
@@ -284,7 +293,7 @@ func (ed *EnDecAMF3) decodeObject(r io.Reader) (interface{}, error) {
 	if traitIsRef {
 		index := int(refVal >> 1)
 		if index >= len(ed.traitTable) {
-			return nil, fmt.Errorf("amf3 decode object: trait index outbound(expected < %d, got %d)", len(ed.traitTable), index)
+			return nil, fmt.Errorf("trait index outbound(expected < %d, got %d)", len(ed.traitTable), index)
 		}
 
 		trait = ed.traitTable[index]
@@ -296,7 +305,8 @@ func (ed *EnDecAMF3) decodeObject(r io.Reader) (interface{}, error) {
 		trait.Dynamic = (refVal & 0x04) == 1
 
 		// Note: use the empty string for anonymous classes
-		if trait.Type, err = ed.decodeString(r); err != nil {
+		trait.Type, err = ed.decodeString(r)
+		if err != nil {
 			return nil, err
 		}
 
@@ -304,7 +314,8 @@ func (ed *EnDecAMF3) decodeObject(r io.Reader) (interface{}, error) {
 		count := int(refVal >> 3)
 		trait.Properties = make([]string, count)
 		for i := 0; i < count; i++ {
-			if trait.Properties[i], err = ed.decodeString(r); err != nil {
+			trait.Properties[i], err = ed.decodeString(r)
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -322,16 +333,19 @@ func (ed *EnDecAMF3) decodeObject(r io.Reader) (interface{}, error) {
 		switch trait.Type {
 		case "DSA":
 			// AsyncMessageExt
-			if result, err = ed.decodeAsyncMessage(r); err != nil {
+			result, err = ed.decodeAsyncMessage(r)
+			if err != nil {
 				return nil, err
 			}
 		case "DSK":
 			// AcknowledgeMessageExt
-			if result, err = ed.decodeAcknowledgeMessage(r); err != nil {
+			result, err = ed.decodeAcknowledgeMessage(r)
+			if err != nil {
 				return nil, err
 			}
 		case "flex.messaging.io.ArrayCollection":
-			if result, err = ed.Decode(r); err != nil {
+			result, err = ed.Decode(r)
+			if err != nil {
 				return nil, err
 			}
 
@@ -339,12 +353,14 @@ func (ed *EnDecAMF3) decodeObject(r io.Reader) (interface{}, error) {
 			ed.deObjTable = append(ed.deObjTable, result)
 		default:
 			// 调用外部函数
-			if fn, ok := ed.externalHandlers[trait.Type]; ok {
-				if result, err = fn(ed, r); err != nil {
+			fn, ok := ed.externalHandlers[trait.Type]
+			if ok {
+				result, err = fn(ed, r)
+				if err != nil {
 					return nil, err
 				}
 			} else {
-				return nil, errors.New("no targer function")
+				return nil, errors.New("no target function")
 			}
 		}
 
@@ -403,13 +419,13 @@ func (ed *EnDecAMF3) decodeXmlDoc(r io.Reader) (string, error) {
 	if isRef {
 		index := int(refVal)
 		if index >= len(ed.deObjTable) {
-			return "", fmt.Errorf("amf3 decode xml: object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
+			return "", fmt.Errorf("object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
 		}
 
 		// 转换类型
 		result, ok := ed.deObjTable[index].(string)
 		if !ok {
-			return "", fmt.Errorf("amf3 decode xml: cannot coerce object reference into xml string")
+			return "", fmt.Errorf("cannot coerce object reference into xml string")
 		}
 
 		return result, nil
@@ -422,7 +438,8 @@ func (ed *EnDecAMF3) decodeXmlDoc(r io.Reader) (string, error) {
 
 	// 按数值取值
 	buf := make([]byte, refVal)
-	if _, err = r.Read(buf); err != nil {
+	_, err = r.Read(buf)
+	if err != nil {
 		return "", err
 	}
 
@@ -443,13 +460,13 @@ func (ed *EnDecAMF3) decodeByteArray(r io.Reader) ([]byte, error) {
 	if isRef {
 		index := int(refVal)
 		if index >= len(ed.deObjTable) {
-			return nil, fmt.Errorf("amf3 decode byte array: object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
+			return nil, fmt.Errorf("object index outbound(expected < %d, got %d)", len(ed.deObjTable), index)
 		}
 
 		// 转换类型
 		result, ok := ed.deObjTable[index].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("amf3 decode byte array: unable to convert object ref to bytes")
+			return nil, fmt.Errorf("unable to convert object ref to bytes")
 		}
 
 		return result, nil
@@ -462,7 +479,8 @@ func (ed *EnDecAMF3) decodeByteArray(r io.Reader) ([]byte, error) {
 
 	// 按数值取值
 	result := make([]byte, refVal)
-	if _, err := r.Read(result); err != nil {
+	_, err = r.Read(result)
+	if err != nil {
 		return nil, err
 	}
 
@@ -576,13 +594,15 @@ func (ed *EnDecAMF3) Encode(w io.Writer, val interface{}) (int, error) {
 		return ed.encodeArray(w, arr)
 	}
 
-	return 0, fmt.Errorf("encode amf3: unsupported type %s", v.Type())
+	return 0, fmt.Errorf("undefined type %s", v.Type())
 }
 
 // EncodeBatch 批量封装AMF(底层调用Encode)
 func (ed *EnDecAMF3) EncodeBatch(w io.Writer, args ...interface{}) error {
+	var err error
 	for _, v := range args {
-		if _, err := ed.Encode(w, v); err != nil {
+		_, err = ed.Encode(w, v)
+		if err != nil {
 			return err
 		}
 	}
@@ -593,7 +613,8 @@ func (ed *EnDecAMF3) EncodeBatch(w io.Writer, args ...interface{}) error {
 // ======================================================================
 
 func (ed *EnDecAMF3) encodeUndefined(w io.Writer) (int, error) {
-	if err := writeByte(w, undefinedMarkerOnAMF3); err != nil {
+	err := writeByte(w, undefinedMarkerOnAMF3)
+	if err != nil {
 		return 0, err
 	}
 
@@ -601,7 +622,8 @@ func (ed *EnDecAMF3) encodeUndefined(w io.Writer) (int, error) {
 }
 
 func (ed *EnDecAMF3) encodeNull(w io.Writer) (int, error) {
-	if err := writeByte(w, nullMarkerOnAMF3); err != nil {
+	err := writeByte(w, nullMarkerOnAMF3)
+	if err != nil {
 		return 0, err
 	}
 
@@ -609,7 +631,8 @@ func (ed *EnDecAMF3) encodeNull(w io.Writer) (int, error) {
 }
 
 func (ed *EnDecAMF3) encodeFalse(w io.Writer) (int, error) {
-	if err := writeByte(w, falseMarkerOnAMF3); err != nil {
+	err := writeByte(w, falseMarkerOnAMF3)
+	if err != nil {
 		return 0, err
 	}
 
@@ -617,113 +640,125 @@ func (ed *EnDecAMF3) encodeFalse(w io.Writer) (int, error) {
 }
 
 func (ed *EnDecAMF3) encodeTrue(w io.Writer) (int, error) {
-	if err := writeByte(w, trueMarkerOnAMF3); err != nil {
+	err := writeByte(w, trueMarkerOnAMF3)
+	if err != nil {
 		return 0, err
 	}
 
 	return 1, nil
 }
 
-func (ed *EnDecAMF3) encodeInteger(w io.Writer, val uint32) (n int, err error) {
-	if err = writeByte(w, integerMarkerOnAMF3); err != nil {
-		return
+func (ed *EnDecAMF3) encodeInteger(w io.Writer, val uint32) (int, error) {
+	err := writeByte(w, integerMarkerOnAMF3)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	var m = 0
-	if m, err = ed.writeUint29(w, val); err != nil {
-		return
+	m, err = ed.writeUint29(w, val)
+	if err != nil {
+		return n, err
 	}
 	n += m
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF3) encodeDouble(w io.Writer, val float64) (n int, err error) {
-	if err = writeByte(w, doubleMarkerOnAMF3); err != nil {
-		return
+func (ed *EnDecAMF3) encodeDouble(w io.Writer, val float64) (int, error) {
+	err := writeByte(w, doubleMarkerOnAMF3)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
-	if err = binary.Write(w, binary.BigEndian, val); err != nil {
-		return
+	err = binary.Write(w, binary.BigEndian, val)
+	if err != nil {
+		return 0, err
 	}
 	n += 8
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF3) encodeString(w io.Writer, val string) (n int, err error) {
-	if err = writeByte(w, stringMarkerOnAMF3); err != nil {
-		return
+func (ed *EnDecAMF3) encodeString(w io.Writer, val string) (int, error) {
+	err := writeByte(w, stringMarkerOnAMF3)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	var m = 0
-	if m, err = ed.encodeUtf8(w, val); err != nil {
-		return
+	m, err = ed.encodeUtf8(w, val)
+	if err != nil {
+		return 0, err
 	}
 	n += m
 
 	// 简化编码器: 忽略缓存(enStrTable)
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF3) encodeDate(w io.Writer, val time.Time) (n int, err error) {
-	if err = writeByte(w, dateMarkerOnAMF3); err != nil {
-		return
+func (ed *EnDecAMF3) encodeDate(w io.Writer, val time.Time) (int, error) {
+	err := writeByte(w, dateMarkerOnAMF3)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
-	if err = writeByte(w, 0x01); err != nil {
-		return
+	err = writeByte(w, 0x01)
+	if err != nil {
+		return 0, err
 	}
 	n++
 
 	u64 := float64(val.Unix()) * 1000.0
 	err = binary.Write(w, binary.BigEndian, &u64)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += 8
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF3) encodeArray(w io.Writer, val Array) (n int, err error) {
-	if err = writeByte(w, arrayMarkerOnAMF3); err != nil {
-		return
+func (ed *EnDecAMF3) encodeArray(w io.Writer, val Array) (int, error) {
+	err := writeByte(w, arrayMarkerOnAMF3)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	var m int
-	if m, err = ed.encodeUint29(w, false, uint32(len(val))); err != nil {
-		return
+	m, err = ed.encodeUint29(w, false, uint32(len(val)))
+	if err != nil {
+		return 0, err
 	}
 	n += m
 
 	m, err = ed.encodeUtf8(w, "")
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
 	for _, v := range val {
 		m, err = ed.Encode(w, v)
 		if err != nil {
-			return
+			return 0, err
 		}
 		n += m
 	}
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF3) encodeObject(w io.Writer, val TypedObject) (n int, err error) {
-	if err = writeByte(w, objectMarkerOnAMF3); err != nil {
-		return
+func (ed *EnDecAMF3) encodeObject(w io.Writer, val TypedObject) (int, error) {
+	err := writeByte(w, objectMarkerOnAMF3)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	// 初始化特性表
 	var trait TraitAMF3
@@ -751,14 +786,14 @@ func (ed *EnDecAMF3) encodeObject(w io.Writer, val TypedObject) (n int, err erro
 	var m = 0
 	m, err = ed.writeUint29(w, u29)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
 	// 写入类型
 	m, err = ed.encodeUtf8(w, trait.Type)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
@@ -766,21 +801,21 @@ func (ed *EnDecAMF3) encodeObject(w io.Writer, val TypedObject) (n int, err erro
 	for _, prop := range trait.Properties {
 		m, err = ed.encodeUtf8(w, prop)
 		if err != nil {
-			return
+			return 0, err
 		}
 		n += m
 	}
 
 	// 外部调用这里返回
 	if trait.Externalizable {
-		return
+		return 0, err
 	}
 
 	// 写入value
 	for _, prop := range trait.Properties {
 		m, err = ed.Encode(w, val.Object[prop])
 		if err != nil {
-			return
+			return 0, err
 		}
 		n += m
 	}
@@ -798,13 +833,15 @@ func (ed *EnDecAMF3) encodeObject(w io.Writer, val TypedObject) (n int, err erro
 
 			// 如果找不到, 那么编码
 			if !foundProp {
-				if m, err = ed.encodeUtf8(w, k); err != nil {
-					return
+				m, err = ed.encodeUtf8(w, k)
+				if err != nil {
+					return 0, err
 				}
 				n += m
 
-				if m, err = ed.Encode(w, v); err != nil {
-					return
+				m, err = ed.Encode(w, v)
+				if err != nil {
+					return 0, err
 				}
 				n += m
 			}
@@ -812,54 +849,55 @@ func (ed *EnDecAMF3) encodeObject(w io.Writer, val TypedObject) (n int, err erro
 			// 写入结束符
 			m, err = ed.encodeUtf8(w, "")
 			if err != nil {
-				return
+				return 0, err
 			}
 			n += m
 		}
 	}
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF3) encodeByteArray(w io.Writer, val []byte) (n int, err error) {
-	if err = writeByte(w, byteArrayMarkerOnAMF3); err != nil {
-		return
+func (ed *EnDecAMF3) encodeByteArray(w io.Writer, val []byte) (int, error) {
+	err := writeByte(w, byteArrayMarkerOnAMF3)
+	if err != nil {
+		return 0, err
 	}
-	n++
+	n := 1
 
 	var m = 0
-	if m, err = ed.encodeUint29(w, false, uint32(len(val))); err != nil {
-		return
+	m, err = ed.encodeUint29(w, false, uint32(len(val)))
+	if err != nil {
+		return 0, err
 	}
 	n += m
 
 	// 编码字节
 	m, err = w.Write(val)
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
-	return
+	return n, nil
 }
 
-func (ed *EnDecAMF3) encodeUtf8(w io.Writer, val string) (n int, err error) {
-	var m = 0
-
+func (ed *EnDecAMF3) encodeUtf8(w io.Writer, val string) (int, error) {
 	// 编码原始长度
-	if m, err = ed.encodeUint29(w, false, uint32(len(val))); err != nil {
-		return
+	m, err := ed.encodeUint29(w, false, uint32(len(val)))
+	if err != nil {
+		return 0, err
 	}
-	n += m
+	n := m
 
 	// 编码字符串
 	m, err = w.Write([]byte(val))
 	if err != nil {
-		return
+		return 0, err
 	}
 	n += m
 
-	return
+	return n, nil
 }
 
 func (ed *EnDecAMF3) encodeUint29(w io.Writer, isRef bool, val uint32) (int, error) {
@@ -882,7 +920,7 @@ func (ed *EnDecAMF3) writeUint29(w io.Writer, val uint32) (int, error) {
 	} else if val <= 0x1FFFFFFF {
 		result = []byte{byte(val>>22 | 0x80), byte(val>>15&0x7F | 0x80), byte(val>>8&0x7F | 0x80), byte(val)}
 	} else {
-		return 0, fmt.Errorf("amf3 encode: cannot encode u29 with value %d (out of range)", val)
+		return 0, fmt.Errorf("cannot encode u29 with value %d (out of range)", val)
 	}
 
 	return w.Write(result)

@@ -21,7 +21,8 @@ func init() {
 	w := bytes.NewBuffer(nil)
 
 	// 将"SetDataFrame"指令所对应的数据封装成AMF0格式, 写到w中
-	if _, err := NewEnDecAMF0().Encode(w, SetDataFrame); err != nil {
+	_, err := NewEnDecAMF0().Encode(w, SetDataFrame)
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -44,6 +45,7 @@ func AddMetaHeader(p []byte, d Decoder) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("setFrameFrame error")
 	}
+
 	if vv != SetDataFrame {
 		tmpLen := len(setFrameFrame)
 
@@ -72,6 +74,7 @@ func DelMetaHeader(p []byte, d Decoder) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("metadata error")
 	}
+
 	if vv == SetDataFrame {
 		p = p[len(setFrameFrame):]
 	}
