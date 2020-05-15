@@ -1,0 +1,44 @@
+package table
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestDescriptor_Service(t *testing.T) {
+	at := assert.New(t)
+
+	sdtDesc := NewDescriptor()
+	at.Nil(sdtDesc.Service(1, "test provider", "test service"))
+
+	at.Equal([]byte{
+		0x48, 0x1c, 0x1, 0xd, 0x74, 0x65, 0x73, 0x74,
+		0x20, 0x70, 0x72, 0x6f, 0x76, 0x69, 0x64, 0x65,
+		0x72, 0xc, 0x74, 0x65, 0x73, 0x74, 0x20, 0x73,
+		0x65, 0x72, 0x76, 0x69, 0x63, 0x65,
+	}, sdtDesc.GetBuffer().Bytes())
+}
+
+func TestDescriptor_NetworkName(t *testing.T) {
+	at := assert.New(t)
+
+	sdtDesc := NewDescriptor()
+	at.Nil(sdtDesc.NetworkName("test network"))
+
+	at.Equal([]byte{
+		0x40, 0xc, 0x74, 0x65, 0x73, 0x74, 0x20, 0x6e,
+		0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b,
+	}, sdtDesc.GetBuffer().Bytes())
+}
+
+func TestDescriptor_CountryAvailability(t *testing.T) {
+	at := assert.New(t)
+
+	sdtDesc := NewDescriptor()
+	at.Nil(sdtDesc.CountryAvailability(true, 1234))
+
+	at.Equal([]byte{
+		0x49, 0x4, 0x80, 0x0, 0x0, 0x4, 0xd2,
+	}, sdtDesc.GetBuffer().Bytes())
+}
