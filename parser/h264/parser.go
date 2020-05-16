@@ -2,10 +2,9 @@ package h264
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
-
-	"github.com/pkg/errors"
 )
 
 // Parser H264解析器

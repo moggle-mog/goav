@@ -1,11 +1,11 @@
 package aac
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/moggle-mog/goav/container/flv"
-	"github.com/pkg/errors"
 )
 
 // Parser aac解析器

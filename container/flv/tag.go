@@ -2,10 +2,10 @@
 package flv
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/moggle-mog/goav/packet"
-	"github.com/pkg/errors"
 )
 
 // Tag Header

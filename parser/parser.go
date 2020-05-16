@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -8,8 +9,6 @@ import (
 	"github.com/moggle-mog/goav/parser/aac"
 	"github.com/moggle-mog/goav/parser/h264"
 	"github.com/moggle-mog/goav/parser/mp3"
-
-	"github.com/pkg/errors"
 )
 
 // CodecParser 解析器

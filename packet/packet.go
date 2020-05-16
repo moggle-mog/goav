@@ -50,3 +50,13 @@ type VideoPacketHeader interface {
 	CodecID() uint8
 	CompositionTime() int32
 }
+
+// Reader 通用读接口
+type Reader interface {
+	Read(*Packet) error
+}
+
+// Writer 通用写接口
+type Writer interface {
+	Write(*Packet) error
+}

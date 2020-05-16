@@ -1,0 +1,168 @@
+package gop
+
+import (
+	"testing"
+
+	"github.com/moggle-mog/goav/packet"
+	"github.com/stretchr/testify/assert"
+)
+
+type buffer struct {
+	pkgChan chan *packet.Packet
+}
+
+func newBuffer() *buffer {
+	return &buffer{
+		pkgChan: make(chan *packet.Packet, 1024),
+	}
+}
+
+func (b *buffer) Write(p *packet.Packet) error {
+	b.pkgChan <- p
+	return nil
+}
+
+func (b *buffer) Read() *packet.Packet {
+	return <-b.pkgChan
+}
+
+func TestNewCache(t *testing.T) {
+	at := assert.New(t)
+
+	p1 := &packet.Packet{
+		Data: []byte{1, 2, 3},
+	}
+	p2 := &packet.Packet{
+		Data: []byte{4, 5, 6},
+	}
+
+	gop := newGopCache(3)
+
+	// case1: 模拟关键帧插入过程
+	at.Nil(gop.Write(p1, true))
+	at.Equal(0, gop.index)
+
+	// case2: 模拟非关键帧插入过程
+	for i := 0; i < 5; i++ {
+		at.Nil(gop.Write(p2, false))
+	}
+
+	nb := newBuffer()
+
+	// case3: 模拟将GOP发送到客户端
+	at.Nil(gop.SendTo(nb))
+	at.Equal(0, gop.index)
+
+	// 验证GOP
+	l := len(nb.pkgChan)
+	at.Equal(6, l)
+
+	var data []byte
+	for i := 0; i < l; i++ {
+		p := nb.Read()
+		data = append(data, p.Data...)
+	}
+
+	at.Equal([]byte{
+		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4,
+		0x5, 0x6,
+	}, data)
+
+	// case4: 模拟关键帧插入过程
+	at.Nil(gop.Write(p1, true))
+	at.Equal(1, gop.index)
+
+	// case5: 模拟非关键帧插入过程
+	for i := 0; i < 5; i++ {
+		at.Nil(gop.Write(p2, false))
+	}
+
+	// case6: 模拟将GOP发送到客户端
+	at.Nil(gop.SendTo(nb))
+	at.Equal(1, gop.index)
+
+	// 验证GOP
+	l = len(nb.pkgChan)
+	at.Equal(12, l)
+
+	data = data[:0]
+	for i := 0; i < l; i++ {
+		p := nb.Read()
+		data = append(data, p.Data...)
+	}
+
+	at.Equal([]byte{
+		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4,
+		0x5, 0x6, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6,
+		0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6,
+	}, data)
+
+	// case7: 模拟关键帧
+	at.Nil(gop.Write(p1, true))
+	at.Equal(2, gop.index)
+
+	// case8: 模拟非关键帧
+	for i := 0; i < 5; i++ {
+		at.Nil(gop.Write(p2, false))
+	}
+
+	// case9: 模拟将GOP发送到客户端
+	at.Nil(gop.SendTo(nb))
+	at.Equal(2, gop.index)
+
+	// 验证GOP
+	l = len(nb.pkgChan)
+	at.Equal(18, l)
+
+	data = data[:0]
+	for i := 0; i < l; i++ {
+		p := nb.Read()
+		data = append(data, p.Data...)
+	}
+
+	at.Equal([]byte{
+		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4,
+		0x5, 0x6, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6,
+		0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6,
+		0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6,
+	}, data)
+
+	// case10: 模拟关键帧
+	at.Nil(gop.Write(p1, true))
+	at.Zero(gop.index)
+
+	// case11: 模拟非关键帧
+	for i := 0; i < 5; i++ {
+		at.Nil(gop.Write(p2, false))
+	}
+
+	// case12: 模拟将GOP发送到客户端
+	at.Nil(gop.SendTo(nb))
+	at.Zero(gop.index)
+
+	// 验证GOP
+	l = len(nb.pkgChan)
+	at.Equal(18, l)
+
+	data = data[:0]
+	for i := 0; i < l; i++ {
+		p := nb.Read()
+		data = append(data, p.Data...)
+	}
+
+	at.Equal([]byte{
+		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4,
+		0x5, 0x6, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6,
+		0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6,
+		0x4, 0x5, 0x6, 0x4, 0x5, 0x6, 0x4, 0x5,
+		0x6, 0x4, 0x5, 0x6,
+	}, data)
+}
