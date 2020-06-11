@@ -1,3 +1,5 @@
-.DS_Store
-.idea
-sftp-config.json
+.*
+/sftp-config.json
+/main.go
+/main
+/main_test.go
